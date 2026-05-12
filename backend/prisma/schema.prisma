@@ -1,0 +1,206 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Prisma Schema  –  POS Backend
+// DB: PostgreSQL  (Prisma Postgres / standard pg)
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MANAGER
+  CASHIER
+}
+
+enum SaleStatus {
+  COMPLETED
+  VOID
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  CARD
+}
+
+enum MovementType {
+  SALE        // stock out via billing
+  ADJUSTMENT  // manual admin adjustment
+  RETURN      // stock in via return (v2)
+}
+
+enum AuditAction {
+  PRICE_OVERRIDE
+  STOCK_ADJUST
+  LOGIN
+  LOGOUT
+  PRODUCT_ARCHIVE
+  SALE_VOID
+}
+
+// ─── USER ────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  username     String   @unique
+  passwordHash String
+  role         Role     @default(CASHIER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // relations
+  sales          Sale[]
+  stockMovements StockMovement[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+// ─── CATEGORY ────────────────────────────────────────────────────────────────
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+
+  products  Product[]
+
+  @@map("categories")
+}
+
+// ─── PRODUCT ─────────────────────────────────────────────────────────────────
+
+model Product {
+  id                String   @id @default(cuid())
+  sku               String   @unique      // immutable after first sale
+  name              String
+  categoryId        String?
+  costPrice         Decimal  @default(0)  @db.Decimal(10, 2)
+  sellingPrice      Decimal               @db.Decimal(10, 2)
+  gstRate           Decimal  @default(0)  @db.Decimal(5, 2)  // 0 | 5 | 12 | 18 | 28
+  stockQty          Int      @default(0)
+  lowStockThreshold Int      @default(10)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // relations
+  category       Category?       @relation(fields: [categoryId], references: [id])
+  saleItems      SaleItem[]
+  stockMovements StockMovement[]
+
+  @@index([sku])
+  @@index([categoryId])
+  @@map("products")
+}
+
+// ─── INVOICE SEQUENCE ─────────────────────────────────────────────────────────
+// Single row stores next invoice number atomically
+
+model InvoiceSequence {
+  id      Int @id @default(1)    // always row id=1
+  nextSeq Int @default(1)
+
+  @@map("invoice_sequence")
+}
+
+// ─── SALE ────────────────────────────────────────────────────────────────────
+
+model Sale {
+  id               String      @id @default(cuid())
+  invoiceNo        String      @unique              // INV-0001
+  customerPhone    String?
+  subTotal         Decimal     @db.Decimal(10, 2)   // sum of lineTotals before bill disc
+  discountTotal    Decimal     @default(0) @db.Decimal(10, 2)
+  taxTotal         Decimal     @db.Decimal(10, 2)
+  grandTotal       Decimal     @db.Decimal(10, 2)
+  paymentMode      PaymentMode
+  paidAmount       Decimal     @db.Decimal(10, 2)
+  status           SaleStatus  @default(COMPLETED)
+  createdByUserId  String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  // relations
+  createdBy      User       @relation(fields: [createdByUserId], references: [id])
+  items          SaleItem[]
+
+  @@index([createdAt])
+  @@index([createdByUserId])
+  @@map("sales")
+}
+
+// ─── SALE ITEM ───────────────────────────────────────────────────────────────
+// Snapshots lock prices at time of sale – critical for GST compliance
+
+model SaleItem {
+  id               String  @id @default(cuid())
+  saleId           String
+  productId        String
+  skuSnapshot      String                          // SKU at time of sale
+  nameSnapshot     String                          // name at time of sale
+  qty              Int
+  unitPrice        Decimal @db.Decimal(10, 2)      // locked selling price
+  discount         Decimal @default(0) @db.Decimal(10, 2)
+  gstRateSnapshot  Decimal @db.Decimal(5, 2)       // GST rate at time of sale
+  taxAmount        Decimal @db.Decimal(10, 2)      // CGST+SGST combined
+  lineTotal        Decimal @db.Decimal(10, 2)      // (unitPrice * qty) - discount
+
+  // relations
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+// ─── STOCK MOVEMENT ───────────────────────────────────────────────────────────
+// Immutable audit log for every stock change
+
+model StockMovement {
+  id              String       @id @default(cuid())
+  productId       String
+  type            MovementType
+  qtyDelta        Int                               // + in, – out
+  stockAfter      Int                               // balance after movement
+  referenceId     String?                           // saleId or adjustment ref
+  reason          String?
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+
+  // relations
+  product     Product @relation(fields: [productId], references: [id])
+  createdBy   User    @relation(fields: [createdByUserId], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+// Sensitive actions: price overrides, stock adjustments, logins
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String
+  action    AuditAction
+  entityId  String?     // productId / saleId etc.
+  meta      Json?       // e.g. { oldPrice: 100, newPrice: 120 }
+  createdAt DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

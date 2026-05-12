@@ -1,0 +1,59 @@
+# Dependencies
+backend/node_modules/
+backend/dist/
+
+# Environment variables
+backend/.env
+backend/.env.*
+
+# Logs
+backend/logs/
+backend/*.log
+backend/npm-debug.log*
+
+# Operating System files
+backend/.DS_Store
+backend/Thumbs.db
+
+# Build artifacts
+backend/build/
+backend/coverage/
+
+# IDE and editor files
+backend/.vscode/
+backend/.idea/
+backend/*.swp
+backend/*.swo
+backend/*~
+
+# Prisma
+backend/prisma/migrations/
+
+# Frontend
+
+# Logs
+frontend/logs
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/*.local
+
+# Editor directories and files
+frontend/.vscode/*
+frontend/!.vscode/extensions.json
+frontend/.idea
+frontend/.DS_Store
+frontend/*.suo
+frontend/*.ntvs*
+frontend/*.njsproj
+frontend/*.sln
+frontend/*.sw?
+
+docs
