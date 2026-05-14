@@ -13,8 +13,8 @@ const SAFE_USER_SELECT = {
   createdAt: true,
 };
 
-async function login(req,res) {
-      const { username, password } = req.body;
+async function login(req, res) {
+  const { username, password } = req.body;
   const user = await prisma.user.findUnique({ where: { username } });
   if (!user || !user.isActive) return null;
 
@@ -30,15 +30,10 @@ async function login(req,res) {
 
   // Store token in cookie
   res.cookie("imkaaPos", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 8 * 60 * 60 * 1000, // 8 hours
-    });
-
-  // Audit log
-  await prisma.auditLog.create({
-    data: { userId: user.id, action: "LOGIN" },
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 8 * 60 * 60 * 1000, // 8 hours
   });
 
   return {
@@ -51,18 +46,17 @@ async function login(req,res) {
   };
 }
 
-async function logout(req,res) {
-  const userId = req.user.id
+async function logout(req, res) {
+  const userId = req.user.id;
   await prisma.auditLog.create({
     data: { userId, action: "LOGOUT" },
   });
   res.clearCookie("imkaaPos", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
 }
-
 
 async function getMe(userId) {
   return prisma.user.findUnique({
