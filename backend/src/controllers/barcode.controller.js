@@ -27,7 +27,7 @@ async function generateOne(req, res, next) {
     if (!product)         return fail(res, 'Product not found', 404);
     if (!product.isActive) return fail(res, 'Product is archived', 400);
 
-    const { moduleWidth = 2, height = 60, format = 'svg' } = req.query;
+    const { moduleWidth = 2, height = 40, format = 'svg' } = req.query;
 
     const svg = barcodeService.generateBarcodeSVG(
       product.sku,
@@ -35,7 +35,9 @@ async function generateOne(req, res, next) {
       {
         moduleWidth: parseFloat(moduleWidth),
         height: parseInt(height),
-        price: product.sellingPrice ? `₹${parseFloat(product.sellingPrice).toFixed(2)}` : ''
+        price: product.sellingPrice ? `₹${parseFloat(product.sellingPrice).toFixed(2)}` : '',
+        colors: product.colors,
+        sizes: product.sizes
       }
     );
 
@@ -60,7 +62,7 @@ async function generateBySku(req, res, next) {
     if (!product)          return fail(res, `No product found for SKU: ${req.params.sku}`, 404);
     if (!product.isActive) return fail(res, 'Product is archived', 400);
 
-    const { moduleWidth = 2, height = 60 } = req.query;
+    const { moduleWidth = 2, height = 40 } = req.query;
 
     const svg = barcodeService.generateBarcodeSVG(
       product.sku,
@@ -68,7 +70,9 @@ async function generateBySku(req, res, next) {
       {
         moduleWidth: parseFloat(moduleWidth),
         height: parseInt(height),
-        price: product.sellingPrice ? `₹${parseFloat(product.sellingPrice).toFixed(2)}` : ''
+        price: product.sellingPrice ? `₹${parseFloat(product.sellingPrice).toFixed(2)}` : '',
+        colors: product.colors,
+        sizes: product.sizes
       }
     );
 
@@ -97,7 +101,7 @@ async function generateBySku(req, res, next) {
 // Add ?autoprint=1 to URL to trigger browser print dialog automatically.
 async function generateSheet(req, res, next) {
   try {
-    const { products: requested = [], cols, moduleWidth, barHeight } = req.body;
+    const { products: requested = [], cols, moduleWidth, barHeight = 40 } = req.body;
 
     if (!Array.isArray(requested) || requested.length === 0) {
       return fail(res, 'products array is required and must not be empty');
@@ -110,7 +114,7 @@ async function generateSheet(req, res, next) {
     const ids = requested.map(r => r.productId).filter(Boolean);
     const dbProducts = await prisma.product.findMany({
       where: { id: { in: ids } },
-      select: { id: true, sku: true, name: true, sellingPrice: true, isActive: true },
+      select: { id: true, sku: true, name: true, sellingPrice: true, isActive: true, colors: true, sizes: true },
     });
     const dbMap = Object.fromEntries(dbProducts.map(p => [p.id, p]));
 
@@ -127,6 +131,8 @@ async function generateSheet(req, res, next) {
         sku:          p.sku,
         name:         p.name,
         sellingPrice: p.sellingPrice,
+        colors:       p.colors,
+        sizes:        p.sizes,
         copies:       Math.min(parseInt(r.copies) || 1, 100),
       });
     }
@@ -157,7 +163,7 @@ async function generateSheetAll(req, res, next) {
   try {
     const products = await prisma.product.findMany({
       where:   { isActive: true },
-      select:  { sku: true, name: true, sellingPrice: true },
+      select:  { sku: true, name: true, sellingPrice: true, colors: true, sizes: true },
       orderBy: { sku: 'asc' },
     });
 
@@ -168,7 +174,7 @@ async function generateSheetAll(req, res, next) {
       {
         cols:        parseInt(req.query.cols)        || 3,
         moduleWidth: parseFloat(req.query.moduleWidth) || 1.5,
-        barHeight:   parseInt(req.query.barHeight)   || 50,
+        barHeight:   parseInt(req.query.barHeight)   || 40,
       }
     );
 

@@ -5,6 +5,7 @@ const { prisma } = require('../utils/prisma');
 const PRODUCT_SELECT = {
   id: true, sku: true, name: true,
   categoryId: true, category: { select: { id: true, name: true } },
+  colors: true, sizes: true,
   costPrice: true, sellingPrice: true, gstRate: true,
   stockQty: true, lowStockThreshold: true, isActive: true,
   createdAt: true, updatedAt: true,
@@ -46,6 +47,8 @@ async function create(data) {
       sku:               data.sku.toUpperCase(),
       name:              data.name,
       categoryId:        data.categoryId || null,
+      colors:            data.colors || [],
+      sizes:             data.sizes || [],
       costPrice:         data.costPrice    ?? 0,
       sellingPrice:      data.sellingPrice,
       gstRate:           data.gstRate      ?? 0,

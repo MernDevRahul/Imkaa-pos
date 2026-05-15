@@ -14,6 +14,8 @@ const EMPTY_FORM = {
   sku: "",
   name: "",
   categoryId: "",
+  colors: "",
+  sizes: "",
   costPrice: "",
   sellingPrice: "",
   gstRate: 18,
@@ -100,6 +102,8 @@ export default function ProductsPage() {
       sku: p.sku,
       name: p.name,
       categoryId: p.categoryId || "",
+      colors: p.colors?.join("-") || "",
+      sizes: p.sizes?.join("-") || "",
       costPrice: p.costPrice,
       sellingPrice: p.sellingPrice,
       gstRate: p.gstRate,
@@ -124,6 +128,8 @@ export default function ProductsPage() {
       sku: form.sku.toUpperCase(),
       name: form.name,
       categoryId: form.categoryId || undefined,
+      colors: form.colors ? form.colors.split("-").map(s => s.trim()).filter(Boolean) : [],
+      sizes: form.sizes ? form.sizes.split("-").map(s => s.trim()).filter(Boolean) : [],
       costPrice: parseFloat(form.costPrice) || 0,
       sellingPrice: parseFloat(form.sellingPrice),
       gstRate: parseFloat(form.gstRate) || 0,
@@ -243,7 +249,12 @@ export default function ProductsPage() {
                         fontSize: "0.82rem",
                       }}
                     >
-                      {catName(p.categoryId)}
+                      <div>{catName(p.categoryId)}</div>
+                      <div style={{ fontSize: "0.72rem", opacity: 0.8 }}>
+                        {[p.colors?.join("-"), p.sizes?.join("-")]
+                          .filter(Boolean)
+                          .join(" | ") || "—"}
+                      </div>
                     </td>
                     <td style={{ fontFamily: "var(--font-mono)" }}>
                       {fmt(p.costPrice)}
@@ -356,6 +367,24 @@ export default function ProductsPage() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+        <div className="field-row cols-2">
+          <div className="field">
+            <label className="label">Colors (separate by -)</label>
+            <input
+              value={form.colors}
+              onChange={setF("colors")}
+              placeholder="Red-Blue-Black"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Sizes (separate by -)</label>
+            <input
+              value={form.sizes}
+              onChange={setF("sizes")}
+              placeholder="S-M-L-XL"
+            />
           </div>
         </div>
         <div className="field">

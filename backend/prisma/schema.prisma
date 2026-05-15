@@ -84,6 +84,8 @@ model Product {
   sku               String   @unique      // immutable after first sale
   name              String
   categoryId        String?
+  colors            String[] @default([])
+  sizes             String[] @default([])
   costPrice         Decimal  @default(0)  @db.Decimal(10, 2)
   sellingPrice      Decimal               @db.Decimal(10, 2)
   gstRate           Decimal  @default(0)  @db.Decimal(5, 2)  // 0 | 5 | 12 | 18 | 28

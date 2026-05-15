@@ -99,11 +99,13 @@ function encode128B(text) {
  */
 function generateBarcodeSVG(sku, label = '', opts = {}) {
   const {
-    moduleWidth = 2,
-    height      = 60,
-    fontSize    = 11,
-    quietZone   = 10,
+    moduleWidth = 1.5,
+    height      = 100,
+    fontSize    = 14,
+    quietZone   = 20,
     price       = '',
+    colors      = [],
+    sizes       = [],
   } = opts;
 
   const modules   = encode128B(sku);
@@ -111,19 +113,35 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
   const totalW    = (barCount + quietZone * 2) * moduleWidth;
   
   // Vertical layout metrics
-  const barTop    = 8;
+  const branding      = "Imkaa Store";
+  const brandingSize  = 24;
+  const hasLabel      = !!(label && label.trim());
+  const hasPrice      = !!price;
+  const variantStr    = [colors.join('-'), sizes.join('-')].filter(Boolean).join(' | ');
+  const hasVariant    = !!variantStr;
+
+  // Vertical layout metrics - Fully utilizing 2x2 inch space
+  const brandingY = 28;
+  const barTop    = brandingY + 15;
   const barBottom = barTop + height;
   
-  const hasLabel  = !!(label && label.trim());
-  
-  // Baselines for text
-  const textBaseline1 = barBottom + fontSize + 8; // 8px gap after bars
-  const textBaseline2 = textBaseline1 + fontSize + 4; // 4px gap between lines
+  let nextY = barBottom + 12 + fontSize;
+  let labelY = 0, priceY = 0, variantY = 0;
 
-  const finalLabelY = textBaseline1;
-  const finalSkuY   = hasLabel ? textBaseline2 : textBaseline1;
+  if (hasLabel) {
+    labelY = nextY;
+    nextY += fontSize + 6;
+  }
+  if (hasPrice) {
+    priceY = nextY;
+    nextY += fontSize + 8;
+  }
+  if (hasVariant) {
+    variantY = nextY;
+    nextY += fontSize + 4;
+  }
 
-  const totalH = finalSkuY + 8; // 8px bottom padding
+  const totalH = nextY + 10; 
 
   let bars = '';
   let x    = quietZone * moduleWidth;
@@ -141,18 +159,25 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
   }
 
   const labelX   = totalW / 2;
+  const brandingSVG = `<text x="${labelX}" y="${brandingY}" text-anchor="middle" font-family="sans-serif" font-size="${brandingSize}" font-weight="900" letter-spacing="1" fill="#000">${escXml(branding)}</text>`;
+  
   const labelSVG = hasLabel
-    ? `<text x="${labelX}" y="${finalLabelY}" text-anchor="middle" font-family="monospace" font-size="${fontSize}" fill="#000">${escXml(label)}</text>`
+    ? `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-family="sans-serif" font-size="${fontSize}" font-weight="600" fill="#000">${escXml(label)}</text>`
     : '';
-  const priceSVG = price
-    ? `<text x="${labelX}" y="${finalSkuY}" text-anchor="middle" font-family="monospace" font-size="${fontSize}" font-weight="bold" fill="#000">${escXml(price)}</text>`
+  const priceSVG = hasPrice
+    ? `<text x="${labelX}" y="${priceY}" text-anchor="middle" font-family="sans-serif" font-size="${fontSize + 4}" font-weight="900" fill="#000">${escXml(price)}</text>`
+    : '';
+  const variantSVG = hasVariant
+    ? `<text x="${labelX}" y="${variantY}" text-anchor="middle" font-family="sans-serif" font-size="${fontSize}" fill="#444">${escXml(variantStr)}</text>`
     : '';
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" preserveAspectRatio="xMidYMid meet">
   <rect width="${totalW}" height="${totalH}" fill="#fff"/>
+  ${brandingSVG}
   ${bars}
   ${labelSVG}
   ${priceSVG}
+  ${variantSVG}
 </svg>`;
 }
 
@@ -164,16 +189,16 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
  * @param {object} opts
  * @param {number} opts.cols        Labels per row (default 3)
  * @param {number} opts.moduleWidth Bar module width in px (default 1.5)
- * @param {number} opts.barHeight   Bar height in px (default 50)
+ * @param {number} opts.barHeight   Bar height in px (default 100)
  * @returns {string} Full HTML document string
  */
 function generateBarcodeSheet(products, opts = {}) {
-  const { cols = 3, moduleWidth = 1.5, barHeight = 50 } = opts;
+  const { cols = 4, moduleWidth = 1.5, barHeight = 100 } = opts;
 
   // Expand copies
   const labels = [];
   for (const p of products) {
-    const copies = Math.min(parseInt(p.copies) || 1, 100); // max 100 per product
+    const copies = Math.min(parseInt(p.copies) || 1, 100); 
     for (let i = 0; i < copies; i++) {
       labels.push(p);
     }
@@ -186,8 +211,9 @@ function generateBarcodeSheet(products, opts = {}) {
       svg = generateBarcodeSVG(p.sku, p.name, {
         moduleWidth,
         height: barHeight,
-        fontSize: 10,
-        price: formattedPrice
+        price: formattedPrice,
+        colors: p.colors,
+        sizes: p.sizes
       });
     } catch (e) {
       svg = `<div style="color:red;font-size:11px">Error: ${escXml(e.message)}</div>`;
@@ -202,35 +228,46 @@ function generateBarcodeSheet(products, opts = {}) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>POS — Barcode Sheet</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: monospace; background: #fff; color: #000; }
-    .header { padding: 12px 20px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 16px; }
-    .header span { font-size: 11px; color: #666; }
-    .sheet { display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 8px; padding: 16px; }
-    .label { border: 1px dashed #ccc; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; page-break-inside: avoid; }
-    .label svg { max-width: 100%; height: auto; }
-    .price { font-size: 13px; font-weight: bold; }
-    .no-print { }
+    body { font-family: sans-serif; background: #fff; color: #000; width: 2in; }
+    .sheet { 
+      display: block; 
+    }
+    .label { 
+      width: 2in; 
+      height: 2in; 
+      padding: 0.15in; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      justify-content: center; 
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden;
+      text-align: center;
+    }
+    .label svg { 
+      width: 100%; 
+      height: auto; 
+      max-height: 100%;
+    }
+    @page {
+      size: 2in 2in;
+      margin: 0;
+    }
     @media print {
-      .no-print { display: none !important; }
-      .label { border-color: #999; }
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; }
+      .sheet { margin: 0; padding: 0; }
+      .label:last-child { page-break-after: avoid; break-after: auto; }
     }
   </style>
 </head>
 <body>
-  <div class="header no-print">
-    <h1>POS — Barcode Label Sheet</h1>
-    <span>${labels.length} label(s) · Generated ${new Date().toLocaleString('en-IN')}</span>
-  </div>
   <div class="sheet">
     ${labelCells}
   </div>
   <script>
-    // Auto-open print dialog when opened directly
     if (window.location.search.includes('autoprint=1')) {
       window.onload = () => window.print();
     }

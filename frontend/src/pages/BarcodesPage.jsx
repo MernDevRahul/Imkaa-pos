@@ -289,6 +289,8 @@ export default function BarcodesPage() {
                           }}
                         >
                           {p.category?.name || "—"}
+                          {p.colors?.length > 0 && ` • ${p.colors.join("-")}`}
+                          {p.sizes?.length > 0 && ` • ${p.sizes.join("-")}`}
                         </div>
                       </td>
                       <td
