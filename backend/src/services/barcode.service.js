@@ -99,10 +99,10 @@ function encode128B(text) {
  */
 function generateBarcodeSVG(sku, label = '', opts = {}) {
   const {
-    moduleWidth = 1.5,
-    height      = 100,
-    fontSize    = 14,
-    quietZone   = 20,
+    moduleWidth = 1.8,
+    height      = 110,
+    fontSize    = 16,
+    quietZone   = 8,
     price       = '',
     colors      = [],
     sizes       = [],
@@ -110,15 +110,21 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
 
   const modules   = encode128B(sku);
   const barCount  = modules.length;
-  const totalW    = (barCount + quietZone * 2) * moduleWidth;
+  const barcodeW  = barCount * moduleWidth;
   
   // Vertical layout metrics
-  const branding      = "Imkaa Store";
+  const branding      = "Imkaa Fashions";
   const brandingSize  = 24;
   const hasLabel      = !!(label && label.trim());
   const hasPrice      = !!price;
   const variantStr    = [colors.join('-'), sizes.join('-')].filter(Boolean).join(' | ');
   const hasVariant    = !!variantStr;
+
+  // Further optimized to fill the 2x2 paper even more
+  const minWidth      = 210; 
+  const totalW        = Math.max(barcodeW + quietZone * 2 * moduleWidth, minWidth);
+  const labelX        = totalW / 2;
+  const offsetX       = (totalW - barcodeW) / 2;
 
   // Vertical layout metrics - Fully utilizing 2x2 inch space
   const brandingY = 28;
@@ -130,7 +136,7 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
 
   if (hasLabel) {
     labelY = nextY;
-    nextY += fontSize + 6;
+    nextY += fontSize + 5;
   }
   if (hasPrice) {
     priceY = nextY;
@@ -141,10 +147,10 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
     nextY += fontSize + 4;
   }
 
-  const totalH = nextY + 10; 
+  const totalH = nextY + 8; 
 
   let bars = '';
-  let x    = quietZone * moduleWidth;
+  let x    = offsetX;
 
   for (let i = 0; i < modules.length; i++) {
     if (modules[i] === '1') {
@@ -158,8 +164,7 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
     }
   }
 
-  const labelX   = totalW / 2;
-  const brandingSVG = `<text x="${labelX}" y="${brandingY}" text-anchor="middle" font-family="sans-serif" font-size="${brandingSize}" font-weight="900" letter-spacing="1" fill="#000">${escXml(branding)}</text>`;
+  const brandingSVG = `<text x="${labelX}" y="${brandingY}" text-anchor="middle" font-family="sans-serif" font-size="${brandingSize}" font-weight="900" letter-spacing="0.2" fill="#000">${escXml(branding)}</text>`;
   
   const labelSVG = hasLabel
     ? `<text x="${labelX}" y="${labelY}" text-anchor="middle" font-family="sans-serif" font-size="${fontSize}" font-weight="600" fill="#000">${escXml(label)}</text>`
@@ -181,19 +186,8 @@ function generateBarcodeSVG(sku, label = '', opts = {}) {
 </svg>`;
 }
 
-/**
- * Generate a printable HTML sheet of barcode labels.
- * Sheet is A4-friendly; labels are arranged in a grid.
- *
- * @param {Array<{sku, name, sellingPrice, copies}>} products
- * @param {object} opts
- * @param {number} opts.cols        Labels per row (default 3)
- * @param {number} opts.moduleWidth Bar module width in px (default 1.5)
- * @param {number} opts.barHeight   Bar height in px (default 100)
- * @returns {string} Full HTML document string
- */
 function generateBarcodeSheet(products, opts = {}) {
-  const { cols = 4, moduleWidth = 1.5, barHeight = 100 } = opts;
+  const { cols = 2, moduleWidth = 1.5, barHeight = 100 } = opts;
 
   // Expand copies
   const labels = [];
@@ -204,25 +198,38 @@ function generateBarcodeSheet(products, opts = {}) {
     }
   }
 
-  const labelCells = labels.map(p => {
-    let svg = '';
-    try {
-      const formattedPrice = p.sellingPrice ? `₹${parseFloat(p.sellingPrice).toFixed(2)}` : '';
-      svg = generateBarcodeSVG(p.sku, p.name, {
-        moduleWidth,
-        height: barHeight,
-        price: formattedPrice,
-        colors: p.colors,
-        sizes: p.sizes
-      });
-    } catch (e) {
-      svg = `<div style="color:red;font-size:11px">Error: ${escXml(e.message)}</div>`;
-    }
-    return `
-    <div class="label">
-      ${svg}
-    </div>`;
-  }).join('');
+  const labelCells = [];
+  for (let i = 0; i < labels.length; i += 2) {
+    const p1 = labels[i];
+    const p2 = labels[i + 1];
+
+    const createLabelHTML = (p) => {
+      if (!p) return '<div class="label empty"></div>';
+      let svg = '';
+      try {
+        const formattedPrice = p.sellingPrice ? `₹${parseFloat(p.sellingPrice).toFixed(2)}` : '';
+        svg = generateBarcodeSVG(p.sku, p.name, {
+          moduleWidth,
+          height: barHeight,
+          price: formattedPrice,
+          colors: p.colors,
+          sizes: p.sizes
+        });
+      } catch (e) {
+        svg = `<div style="color:red;font-size:11px">Error: ${escXml(e.message)}</div>`;
+      }
+      return `
+      <div class="label">
+        ${svg}
+      </div>`;
+    };
+
+    labelCells.push(`
+    <div class="row">
+      ${createLabelHTML(p1)}
+      ${createLabelHTML(p2)}
+    </div>`);
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -230,22 +237,32 @@ function generateBarcodeSheet(products, opts = {}) {
   <meta charset="UTF-8">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #fff; color: #000; width: 2in; }
+    body { font-family: sans-serif; background: #fff; color: #000; width: 100mm; margin: 0 auto; }
     .sheet { 
       display: block; 
+      width: 100mm;
+    }
+    .row {
+      display: flex;
+      width: 100mm;
+      height: 50mm;
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden;
     }
     .label { 
-      width: 2in; 
-      height: 2in; 
-      padding: 0.15in; 
+      width: 50mm; 
+      height: 50mm; 
+      padding: 1.5mm; 
       display: flex; 
       flex-direction: column; 
       align-items: center; 
       justify-content: center; 
-      page-break-after: always;
-      break-after: page;
       overflow: hidden;
       text-align: center;
+    }
+    .label.empty {
+      background: transparent;
     }
     .label svg { 
       width: 100%; 
@@ -253,19 +270,19 @@ function generateBarcodeSheet(products, opts = {}) {
       max-height: 100%;
     }
     @page {
-      size: 2in 2in;
+      size: 100mm 50mm;
       margin: 0;
     }
     @media print {
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; }
-      .sheet { margin: 0; padding: 0; }
-      .label:last-child { page-break-after: avoid; break-after: auto; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; width: 100mm; }
+      .sheet { margin: 0; padding: 0; width: 100mm; }
+      .row:last-child { page-break-after: avoid; break-after: auto; }
     }
   </style>
 </head>
 <body>
   <div class="sheet">
-    ${labelCells}
+    ${labelCells.join('')}
   </div>
   <script>
     if (window.location.search.includes('autoprint=1')) {
